@@ -1,0 +1,218 @@
+#!/bin/bash
+read -p "Ensure you are in a tmux session and have configured your scans!"
+echo "++++++++++++++++++++++++++++++++++"
+echo "VPN Connection status:" 
+echo "++++++++++++++++++++++++++++++++++"
+expressvpn status
+echo "++++++++++++++++++++++++++++++++++"
+echo "Your current IP address is: "
+echo "++++++++++++++++++++++++++++++++++"
+curl ifconfig.co
+echo "++++++++++++++++++++++++++++++++++"
+echo "Performing speedtest: "
+echo "++++++++++++++++++++++++++++++++++"
+curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python -
+echo "++++++++++++++++++++++++++++++++++"
+echo "Press enter to continue with current connection: "
+echo "++++++++++++++++++++++++++++++++++"
+read -p ""
+echo "++++++++++++++++++++++++++++++++++"
+read -p "Enter Targets name: " file
+echo "++++++++++++++++++++++++++++++++++"
+mkdir /root/BugBounty/Scans/$file
+cd /root/BugBounty/Scans/$file
+echo "++++++++++++++++++++++++++++++++++"
+read -p "Press enter to add your targets:" null
+echo "++++++++++++++++++++++++++++++++++"
+nano ./Targets.txt
+echo "++++++++++++++++++++++++++++++++++"
+echo "Resolving IP addresses for scanning: "
+echo "++++++++++++++++++++++++++++++++++"
+for ip in $(cat Targets.txt)
+do 
+dig +short $ip | tee -a Targets-IP.txt
+done
+echo "++++++++++++++++++++++++++++++++++"
+echo "Checking Whois for Targets: "
+echo "++++++++++++++++++++++++++++++++++"
+for Target in $(cat Targets.txt)
+do 
+whois $Target | tee -a Ownership
+done
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+read -p "Check ownership and press enter to start scanning: "
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+for Target in $(cat Targets.txt)
+do
+echo "---------------------------------------------------------------" | tee -a Scanner.log
+echo "Auto Scanner"  | tee -a Scanner.log
+echo "$Target - Scanned: $(date)" | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo ""  | tee -a Scanner.log
+echo "---------------------------------------------------------------" | tee -a Scanner.log
+echo "TCP Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+#Uncomment the scan you want
+#Super fast scan
+nmap -Pn -sSVC --top-ports 100 -oN $Target-01-NmapTCP.txt $Target  | tee -a Scanner.log
+#Fast scan
+#nmap -Pn -sSVC --top-ports 1000 -oN $Target-01-NmapTCP.txt $Target  | tee -a Scanner.log
+#Full scan
+#nmap -Pn -sSVC -p- -oN $Target-01-NmapTCP.txt $Target  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "UDP Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+#Uncomment the scan you want
+#Fast scan
+nmap -sUV -sC --top-ports 10 -oN $Target-02-NmapUDP.txt $Target  | tee -a Scanner.log
+#Deep scan
+#nmap -sUV -sC --top-ports 200 -oN $Target-02-NmapUDP.txt $Target  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "Nikto Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+nikto -maxtime 10m -ask no -p 80,443,8000,8080 -h $Target | tee $Target-03-Nikto.txt  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "SSL Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+sslscan --show-certificate --no-colour $Target | tee $Target-04-SSLScan.txt  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "Directory Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+#Uncomment the size of the dictionary you want
+#Small wordlist
+gobuster -fw -u http://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Small.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+gobuster -fw -k -u https://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Small.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#Medium Wordlist
+#gobuster -fw -u http://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Medium.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#gobuster -fw -k -u https://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Medium.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#Large Wordlist
+#gobuster -fw -u http://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Large.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#gobuster -fw -k -u https://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Large.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "Subdomain Bruteforce started $(date)" | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+#Uncomment the scan you want
+gobuster -m dns -w /root/BugBounty/Tools/Payloads/Subdomains-Small.lst -u $Target -i | tee -a Scanner.log | tee -a Subdomains.lst
+#gobuster -m dns -w /root/BugBounty/Tools/Payloads/Subdomains-Medium.lst -u $Target -i | tee -a Scanner.log | tee -a Subdomains.lst
+#gobuster -m dns -w /root/BugBounty/Tools/Payloads/Subdomains-Large.lst -u $Target -i | tee -a Scanner.log | tee -a Subdomains.lst
+done
+for Target in $(cat Targets.txt)
+do
+cat $Target-01-NmapTCP.txt | grep /tcp | grep open >> "$Target"_Ports.txt 2> /dev/null
+cat $Target-02-NmapUDP.txt | grep /udp | grep open | grep -v filtered >> "$Target"_Ports.txt 2> /dev/null
+(
+input="$Target"_Ports.txt      
+while IFS= read -r port
+do     
+echo "$Target":"$port" >> ServicesList.txt
+done <         "$Target"_Ports.txt
+)
+rm *_Ports.txt
+done
+echo
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "The following services were found:" | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+cat ServicesList.txt | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "Masscan started $(date)" | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+read -p "Press enter to scan IP addresses for open ports with masscan:"
+#Uncomment the scan you want
+cat Targets-IP.txt | sort -u > Targets-IP-Unique.lst
+masscan -iL Targets-IP-Unique.lst -p0-1000 --rate 100000 | tee -a Scanner.log
+#masscan -iL Targets-IP-Unique.lst -p0-10000 --rate 100000 | tee -a Scanner.log
+#masscan -iL Targets-IP-Unique.lst -p0-65535 --rate 100000 | tee -a Scanner.log
+cat Subdomains.lst | grep Found | cut -d " " -f 2 > New-Targets.txt
+echo "++++++++++++++++++++++++++++++++++"
+read -p "Press enter to review new targets:" null
+echo "++++++++++++++++++++++++++++++++++"
+nano New-Targets.txt
+echo "++++++++++++++++++++++++++++++++++"
+read -p "Press enter to scan new targets:" null
+echo "++++++++++++++++++++++++++++++++++"
+echo ""
+echo "++++++++++++++++++++++++++++++++++"
+echo "Checking Whois for Targets: "
+echo "++++++++++++++++++++++++++++++++++"
+for Target in $(cat New-Targets.txt)
+do 
+whois $Target | tee -a Ownership
+done
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+read -p "Check ownership and press enter to start scanning: "
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+for Target in $(cat New-Targets.txt)
+do
+echo "---------------------------------------------------------------" | tee -a Scanner.log
+echo "Auto Scanner"  | tee -a Scanner.log
+echo "$Target - Scanned: $(date)" | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo ""  | tee -a Scanner.log
+echo "---------------------------------------------------------------" | tee -a Scanner.log
+echo "TCP Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+#Uncomment the scan you want
+#Super fast scan
+nmap -Pn -sSVC --top-ports 100 -oN $Target-01-NmapTCP.txt $Target  | tee -a Scanner.log
+#Fast scan
+#nmap -Pn -sSVC --top-ports 1000 -oN $Target-01-NmapTCP.txt $Target  | tee -a Scanner.log
+#Full scan
+#nmap -Pn -sSVC -p- -oN $Target-01-NmapTCP.txt $Target  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "UDP Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+#Uncomment the scan you want
+#Fast scan
+nmap -sUV -sC --top-ports 10 -oN $Target-02-NmapUDP.txt $Target  | tee -a Scanner.log
+#Deep scan
+#nmap -sUV -sC --top-ports 200 -oN $Target-02-NmapUDP.txt $Target  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "Nikto Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+nikto -maxtime 10m -ask no -p 80,443,8000,8080 -h $Target | tee $Target-03-Nikto.txt  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "SSL Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+sslscan --show-certificate --no-colour $Target | tee $Target-04-SSLScan.txt  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "Directory Scan Started: $(date)"  | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+#Uncomment the size of the dictionary you want
+#Small wordlist
+gobuster -fw -u http://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Small.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+gobuster -fw -k -u https://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Small.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#Medium Wordlist
+#gobuster -fw -u http://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Medium.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#gobuster -fw -k -u https://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Medium.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#Large Wordlist
+#gobuster -fw -u http://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Large.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+#gobuster -fw -k -u https://$Target/ -w /root/BugBounty/Tools/Payloads/DirectoryList-Large.lst -q -e -t 10 | tee -a $Target-05-Directories.txt  | tee -a Scanner.log
+done
+for Target in $(cat New-Targets.txt)
+do
+cat $Target-01-NmapTCP.txt | grep /tcp | grep open >> "$Target"_Ports.txt 2> /dev/null
+cat $Target-02-NmapUDP.txt | grep /udp | grep open | grep -v filtered >> "$Target"_Ports.txt 2> /dev/null
+(
+input="$Target"_Ports.txt      
+while IFS= read -r port
+do     
+echo "$Target":"$port" >> ServicesList.txt
+done <         "$Target"_Ports.txt
+)
+rm *_Ports.txt
+done
+echo
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "The following Targets were scanned:" | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+cat Targets.txt | tee -a Scanner.log
+cat New-Targets.txt | tee -a Scanner.log
+echo
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+echo "The following services were found:" | tee -a Scanner.log
+echo "---------------------------------------------------------------"  | tee -a Scanner.log
+cat ServicesList.txt | tee -a Scanner.log
+
+cd ../
+zip -r Completed/$file.zip $file
